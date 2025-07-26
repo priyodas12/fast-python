@@ -4,7 +4,6 @@ import sys
 import uuid
 from datetime import datetime
 from http.client import HTTPException
-from random import random
 
 from dotenv import load_dotenv
 from faker import Faker
@@ -95,18 +94,19 @@ def get_order_data(order_id: str):
         return {"error": str(e.args[0])}
 
 
-@app.get("/order/v2/{order_id}")
-def get_order_data_v2(
-    order_id: int | str,
-) -> dict[str, str | int | float | bool | datetime]:
-    return {
-        "order_id": order_id,
-        "is_available": random() < 0.7,
-        "origin_country": "India",
-        "price": round(random() * 10000, 2),
-        "order_delivery_address": f"{faker.address()}",
-        "order_placed_at": datetime.now(),
-    }
+@app.get("/orders")
+def get_order_data_v2():
+    try:
+        db = session()
+        orders = db.query(Order).all()
+        logging.info(f"**************get orders v2 in db: {orders}")
+        return {"orders": orders}
+    except SQLAlchemyError as e:
+        logging.error(e.args[0])
+        return {"error": str(e.args[0])}
+    except AssertionError as e:
+        logging.error(e.args[0])
+        return {"error": str(e.args[0])}
 
 
 # documentation purpose
