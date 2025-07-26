@@ -28,9 +28,7 @@ faker = Faker()
 logging.basicConfig(
     # filename="app.log",
     stream=sys.stdout,
-    filemode="a",  # 'w' to overwrite
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
 
@@ -85,7 +83,7 @@ def get_order_data(order_id: str):
     try:
         db = session()
         order = db.query(Order).filter(Order.order_id == order_id).first()
-        logging.info(f"get order {order_id} from db: {order}\n\n")
+        logging.info(f"******************get order {order_id} from db: {order}\n\n")
         if not order:
             raise HTTPException(detail="Order not found")
         return {"order": order}
