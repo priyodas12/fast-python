@@ -3,15 +3,12 @@ from scalar_fastapi import scalar_fastapi, get_scalar_api_reference
 import uuid
 from datetime import datetime
 from random import random
-from faker import *
+from faker import Faker
 
 app = FastAPI()
 
-from faker import Faker
 
 faker = Faker()
-print(faker.name())
-print(faker.email())
 
 
 @app.get("/")
