@@ -74,12 +74,12 @@ def get_db_connection():
 
 
 @app.get("/")
-def get_app():
+def get_app_status():
 	return {"uuid": uuid.uuid4(), "time": datetime.now()}
 
 
 @app.get("/order/customer", response_model=None)
-def get_order_data(customer_id: str) -> dict[str, Order] | dict[str, str]:
+def get_order_by_customer_id(customer_id: str) -> dict[str, Order] | dict[str, str]:
 	try:
 		db = session()
 		order_orm = db.query(Order).filter(Order.customer_id == str(customer_id)).first()
@@ -100,7 +100,7 @@ def get_order_data(customer_id: str) -> dict[str, Order] | dict[str, str]:
 
 
 @app.get("/order/{order_id}", response_model=None)
-def get_order_data(order_id: str) -> dict[str, Order] | dict[str, str]:
+def get_order_by_order_id(order_id: str) -> dict[str, Order] | dict[str, str]:
 	try:
 		db = session()
 		order_orm = db.query(Order).filter(Order.order_id == str(order_id)).first()
@@ -121,7 +121,7 @@ def get_order_data(order_id: str) -> dict[str, Order] | dict[str, str]:
 
 
 @app.get("/orders")
-def get_order_data_v2():
+def get_orders():
 	try:
 		db = session()
 		orders = db.query(Order).all()
@@ -137,7 +137,8 @@ def get_order_data_v2():
 
 
 # documentation purpose
-@app.get("/scalar")
+# http://0.0.0.0:8000/redoc
+@app.get("/scalar", include_in_schema=False)
 def get_scalar_docs(self):
 	return get_scalar_api_reference(
 		openapi_url="/openapi.json",
