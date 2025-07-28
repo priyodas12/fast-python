@@ -6,7 +6,7 @@ from datetime import datetime
 import coloredlogs
 from dotenv import load_dotenv
 from faker import Faker
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.exceptions import ResponseValidationError
 from scalar_fastapi import get_scalar_api_reference
 from sqlalchemy import Boolean, create_engine, DateTime, Float, String, UUID
@@ -15,13 +15,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.sql.schema import Column
 
-app = FastAPI()
-faker = Faker()
-
-registry.register("cockroach.psycopg2", "cockroach_dialect", "CockroachDBDialect")
-
 load_dotenv(dotenv_path=".env")
-
+app = FastAPI(title=os.getenv("APP_NAME"),
+              version=os.getenv("APP_VERSION"),
+              server_description=[{"url": "http://localhost:8000", "description": "dev server"}]
+              )
+faker = Faker()
+registry.register("cockroach.psycopg2", "cockroach_dialect", "CockroachDBDialect")
 log = logging.getLogger("sqlalchemy.engine")
 database_url = os.getenv("COCKROACH_POSTGRESQL_URL")
 
@@ -78,16 +78,22 @@ def get_app_status():
 	return {"uuid": uuid.uuid4(), "time": datetime.now()}
 
 
-@app.get("/order/customer", response_model=None)
-def get_order_by_customer_id(customer_id: str) -> dict[str, Order] | dict[str, str]:
+@app.get("/orders/customer", response_model=None)
+def get_order_by_customer_id(customer_id: str | None = Query(default=None, max_length=20)) -> dict[str, Order] | dict[
+	str, str]:
 	try:
 		db = session()
+		if not customer_id:
+			log.info("no customer id provided")
+			order_latest = db.query(Order).order_by(Order.order_create_date.desc()).first()
+			log.info(f"latest order : {order_latest} returned!")
+			return {"order": order_latest}
 		order_orm = db.query(Order).filter(Order.customer_id == str(customer_id)).first()
 		log.info(f"order with customer_id {customer_id} from cockroachdb: {order_orm.__str__()}")
 		if not order_orm:
 			log.debug(f"error while getting order with customer_id {customer_id} from db")
 			return {"error": f"customer_id:: {customer_id} not found"}
-		return {"orders": order_orm}
+		return dict("order", order_orm)
 	except SQLAlchemyError as e:
 		log.error(e.args[0])
 		return {"error": str(e.args[0])}
@@ -99,7 +105,7 @@ def get_order_by_customer_id(customer_id: str) -> dict[str, Order] | dict[str, s
 		return {"error": str(e.args[0])}
 
 
-@app.get("/order/{order_id}", response_model=None)
+@app.get("/orders/{order_id}", response_model=None)
 def get_order_by_order_id(order_id: str) -> dict[str, Order] | dict[str, str]:
 	try:
 		db = session()
