@@ -1,7 +1,7 @@
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import coloredlogs
 from dotenv import load_dotenv
@@ -79,8 +79,10 @@ def get_app_status():
 
 
 @app.get("/orders/customer", response_model=None)
-def get_order_by_customer_id(customer_id: str | None = Query(default=None, max_length=20)) -> dict[str, Order] | dict[
-	str, str]:
+def get_order_by_customer_id(customer_id: str | None = Query(default=None, max_length=20)) -> dict[
+	                                                                                              str, any] | \
+                                                                                              dict[
+	                                                                                              str, str]:
 	try:
 		db = session()
 		if not customer_id:
@@ -106,7 +108,7 @@ def get_order_by_customer_id(customer_id: str | None = Query(default=None, max_l
 
 
 @app.get("/orders/{order_id}", response_model=None)
-def get_order_by_order_id(order_id: str) -> dict[str, Order] | dict[str, str]:
+def get_order_by_order_id(order_id: str) -> dict[str, any] | dict[str, str]:
 	try:
 		db = session()
 		order_orm = db.query(Order).filter(Order.order_id == str(order_id)).first()
@@ -138,6 +140,39 @@ def get_orders():
 		log.error(e.args[0])
 		return {"error": str(e.args[0])}
 	except AssertionError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+
+
+@app.post("/orders", response_model=None)
+def post_order(order_desc: str, order_price: float, order_carrier_id: str, customer_id: str) -> dict[str, any] | dict[
+	str, str]:
+	try:
+		random_date = faker.date_time_between(start_date=faker.past_date(), end_date=faker.date_time().now())
+		order = Order(order_id=str(uuid.uuid4()),
+		              order_desc=f"{order_desc}{faker.company()}",
+		              order_price=float(order_price + faker.random_int()),
+		              order_carrier_id=f"{order_carrier_id}{faker.random_int(10000, 910000)}",
+		              customer_id=f"{customer_id}{faker.random_int(10000, 90000)}",
+		              order_barcode=uuid.uuid4(),
+		              order_create_date=random_date + timedelta(days=-5),
+		              order_update_date=random_date,
+		              order_origin=faker.country(),
+		              delivery_date=faker.date_time(),
+		              order_discount=float(faker.random_number(4)) / 100,
+		              order_availability=float(faker.random_number()) > 7, )
+		db = session()
+		db.add(order)
+		db.commit()
+		db.refresh(order)
+		return {"order": order}
+	except SQLAlchemyError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+	except AssertionError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+	except ResponseValidationError as e:
 		log.error(e.args[0])
 		return {"error": str(e.args[0])}
 
