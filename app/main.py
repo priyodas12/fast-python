@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
@@ -18,6 +19,8 @@ from app.dao.database import session
 from app.dao.order_dao import *
 from app.model.order import Order
 from app.model.order_orm import order_orm_to_order, OrderORM
+from app.model.order_package import OrderPackage
+from app.model.order_status import OrderStatus
 
 load_dotenv(dotenv_path=".env")
 app = FastAPI(title=os.getenv("APP_NAME"),
@@ -134,8 +137,8 @@ def post_order(order_desc: str, order_price: float, carrier_id: str, customer_id
 		                 order_availability=float(faker.random_number()) > 7,
 		                 weight=float(faker.random_number()) / 100,
 		                 volume=float(faker.random_number()) / 100,
-		                 order_status="NEW",
-		                 package_type="TEST", )
+		                 order_status=random.choice(list(OrderStatus)),
+		                 package_type=random.choice(list(OrderPackage)), )
 		create_order(db, order)
 		order_return = order_orm_to_order(order)
 		return {"order": order_return}
@@ -170,8 +173,8 @@ def post_order_with_request_body(order: Order) -> dict[str, Order] | dict[str, s
 		                 order_availability=float(faker.random_number()) > 0.7,
 		                 weight=float(faker.random_number()) / 100,
 		                 volume=float(faker.random_number()) / 100,
-		                 order_status="NEW",
-		                 package_type="PACKAGE", )
+		                 order_status=random.choice(list(OrderStatus)),
+		                 package_type=random.choice(list(OrderPackage)), )
 		create_order(db, order)
 		return {"order": order_orm_to_order(order)}
 	except SQLAlchemyError as e:
