@@ -14,8 +14,7 @@ from sqlalchemy.dialects import registry
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.dao.database import session
-from app.dao.order_dao import create_order, get_all_orders, get_order_by_cust_id, get_order_by_id, get_order_latest, \
-	update_order
+from app.dao.order_dao import *
 from app.model.order_model import Order
 
 load_dotenv(dotenv_path=".env")
@@ -188,8 +187,9 @@ def put_order(data: dict[str, str | float | bool | datetime]) -> dict[str, any] 
 			order_carrier_id=f"{data.get("order_carrier_id")}",
 			customer_id=f"{data.get("customer_id")}",
 			order_barcode=f"{data.get("order_barcode")}",
+			order_create_date=data.get("order_create_date"),
 			order_update_date=datetime.now(),
-			delivery_date=data.get("order_delivery_date"),
+			delivery_date=data.get("delivery_date"),
 			order_availability=data.get("order_availability"), )
 		order_updated = update_order(db, order)
 		log.info(f"updated order: {order_updated}")
@@ -205,6 +205,7 @@ def put_order(data: dict[str, str | float | bool | datetime]) -> dict[str, any] 
 		return {"error": str(e.args[0])}
 	except Exception as e:
 		log.error(e.args[0])
+		return {"error": str(e.args[0])}
 
 
 # documentation purpose

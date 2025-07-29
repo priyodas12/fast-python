@@ -1,3 +1,5 @@
+import logging as log
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -24,13 +26,26 @@ def create_order(db: Session, order: Order):
 	return db.add(order)
 
 
+def update_order_field(db_order, order):
+	db_order.order_id = order.order_id
+	db_order.order_desc = order.order_desc
+	db_order.order_carrier_id = order.order_carrier_id
+	db_order.order_price = order.order_price
+	db_order.order_availability = order.order_availability
+	db_order.order_create_date = order.order_create_date
+	db_order.order_update_date = order.order_update_date
+	return db_order
+
+
 def update_order(db: Session, order: Order):
-	db_user = get_order_by_id(db, order.order_id)
-	if not Order.order_id:
+	db_order = get_order_by_id(db, order.order_id)
+	if not db_order:
+		log.info(f"Exception while fetching new order: {db_order}")
 		raise HTTPException(status_code=404, detail=f"Order: {order.order_id} not found")
+	update_order_field(db_order, order)
 	db.commit()
-	db.refresh(db_user)
-	return db_user
+	db.refresh(db_order)
+	return db_order
 
 
 def delete_order(db: Session, order: Order):
