@@ -1,5 +1,13 @@
 ### FAST API WITH PYTHON
 
+Tech Stack:
+
+```
+python
+fast-api
+cockroach-db(docker)
+```
+
 CMD
 
 ``
@@ -25,3 +33,4 @@ CREATE TABLE orders.order (
     order_discount float
 );
 ```
+
