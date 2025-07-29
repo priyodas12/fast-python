@@ -48,5 +48,11 @@ def update_order(db: Session, order: Order):
 	return db_order
 
 
-def delete_order(db: Session, order: Order):
-	return db.delete(order)
+def delete_order_by_order_id(db: Session, order_id: str):
+	db_order = get_order_by_id(db, order_id)
+	if not db_order:
+		log.info(f"Exception while fetching new order: {db_order}")
+		raise HTTPException(status_code=404, detail=f"Order: {order_id} not found")
+	db.delete(db_order)
+	db.commit()
+	return db_order

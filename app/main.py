@@ -208,6 +208,28 @@ def put_order(data: dict[str, str | float | bool | datetime]) -> dict[str, any] 
 		return {"error": str(e.args[0])}
 
 
+@app.delete("/v1/orders/{order_id}", response_model=None)
+def delete_order(order_id: str) -> dict[str, any] | dict[str, str]:
+	try:
+		db = session()
+		log.info(f"deleting order data: {order_id}")
+		deleted_order = delete_order_by_order_id(db, order_id)
+		log.info(f"updated order: {deleted_order}")
+		return {f"{order_id}": "deleted"}
+	except SQLAlchemyError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+	except AssertionError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+	except ResponseValidationError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+	except Exception as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+
+
 # documentation purpose
 # http://0.0.0.0:8000/redoc
 @app.get("/scalar", include_in_schema=False)
