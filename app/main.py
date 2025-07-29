@@ -144,7 +144,7 @@ def get_orders():
 		return {"error": str(e.args[0])}
 
 
-@app.post("/orders", response_model=None)
+@app.post("/v1/orders", response_model=None)
 def post_order(order_desc: str, order_price: float, order_carrier_id: str, customer_id: str) -> dict[str, any] | dict[
 	str, str]:
 	try:
@@ -154,6 +154,39 @@ def post_order(order_desc: str, order_price: float, order_carrier_id: str, custo
 		              order_price=float(order_price + faker.random_int()),
 		              order_carrier_id=f"{order_carrier_id}{faker.random_int(10000, 910000)}",
 		              customer_id=f"{customer_id}{faker.random_int(10000, 90000)}",
+		              order_barcode=uuid.uuid4(),
+		              order_create_date=random_date + timedelta(days=-5),
+		              order_update_date=random_date,
+		              order_origin=faker.country(),
+		              delivery_date=faker.date_time(),
+		              order_discount=float(faker.random_number(4)) / 100,
+		              order_availability=float(faker.random_number()) > 7, )
+		db = session()
+		db.add(order)
+		db.commit()
+		db.refresh(order)
+		return {"order": order}
+	except SQLAlchemyError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+	except AssertionError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+	except ResponseValidationError as e:
+		log.error(e.args[0])
+		return {"error": str(e.args[0])}
+
+
+@app.post("/v2/orders", response_model=None)
+def post_order_model(data: dict[str, str | float]) -> dict[str, any] | dict[str, str]:
+	try:
+		random_date = faker.date_time_between(start_date=faker.past_date(), end_date=faker.date_time().now())
+		log.info(f"received order data: {data}")
+		order = Order(order_id=str(uuid.uuid4()),
+		              order_desc=f"{data.get("order_desc")}{faker.company()}",
+		              order_price=float(data.get("order_price") + faker.random_int()),
+		              order_carrier_id=f"{data.get("order_carrier_id")}{faker.random_int(10000, 910000)}",
+		              customer_id=f"{data.get("customer_id")}{faker.random_int(10000, 90000)}",
 		              order_barcode=uuid.uuid4(),
 		              order_create_date=random_date + timedelta(days=-5),
 		              order_update_date=random_date,
