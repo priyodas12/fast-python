@@ -22,10 +22,11 @@ def get_all_orders(db: Session):
 	return db.query(OrderORM).all()
 
 
-def create_order(db: Session, order: OrderORM):
+def create_order(db: Session, order: OrderORM) -> OrderORM:
 	db.add(order)
 	db.commit()
-	return db.refresh(order)
+	
+	return order
 
 
 def update_order_field(db_order, order):

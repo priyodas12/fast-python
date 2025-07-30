@@ -13,6 +13,7 @@ CMD
 ``
 pip install fastapi[all]
 pip install scalar_fastapi
+source env/dev/bin/activate
 ``
 
 Create Table:
