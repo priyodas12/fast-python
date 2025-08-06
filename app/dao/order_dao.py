@@ -25,30 +25,35 @@ def get_all_orders(db: Session):
 def create_order(db: Session, order: OrderORM) -> OrderORM:
 	db.add(order)
 	db.commit()
-	
 	return order
 
 
-def update_order_field(db_order, order):
-	db_order.order_id = order.order_id
-	db_order.order_desc = order.order_desc
-	db_order.carrier_id = order.carrier_id
-	db_order.order_price = order.order_price
-	db_order.order_availability = order.order_availability
-	db_order.order_create_date = order.order_create_date
-	db_order.order_update_date = order.order_update_date
-	return db_order
+def update_order_field(order_exists, order):
+	order_exists.order_id = order.order_id
+	order_exists.customer_id = order.customer_id
+	order_exists.weight = order.weight
+	order_exists.volume = order.volume
+	order_exists.customer_id = order.customer_id
+	order_exists.order_discount = order.order_discount
+	order_exists.package_type = order.package_type
+	order_exists.order_desc = order.order_desc
+	order_exists.carrier_id = order.carrier_id
+	order_exists.order_price = order.order_price
+	order_exists.order_availability = order.order_availability
+	order_exists.order_create_date = order.order_create_date
+	order_exists.order_update_date = order.order_update_date
+	return order_exists
 
 
-def update_order(db: Session, order: OrderORM):
-	db_order = get_order_by_id(db, order.order_id)
-	if not db_order:
-		log.info(f"Exception while fetching new order: {db_order}")
-		raise HTTPException(status_code=404, detail=f"Order: {order.order_id} not found")
-	update_order_field(db_order, order)
+def update_order(db: Session, order_orm: OrderORM):
+	order_exists = get_order_by_id(db, order_orm.order_id)
+	if not order_exists:
+		log.info(f"Exception while fetching new order: {order_exists}")
+		raise HTTPException(status_code=404, detail=f"Order: {order_exists.order_id} not found")
+	update_order_field(order_exists, order_orm)
 	db.commit()
-	db.refresh(db_order)
-	return db_order
+	db.refresh(order_exists)
+	return order_exists
 
 
 def delete_order_by_order_id(db: Session, order_id: str):

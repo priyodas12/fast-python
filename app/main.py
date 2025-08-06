@@ -18,16 +18,15 @@ from starlette.responses import JSONResponse
 
 from app.dao.database import session
 from app.dao.order_dao import *
-from app.model.order import Order
+from app.model.enums.order_package import OrderPackage
+from app.model.enums.order_status import OrderStatus
+from app.model.order_create import OrderCreate
 from app.model.order_orm import OrderORM
-from app.model.order_package import OrderPackage
-from app.model.order_status import OrderStatus
+from app.model.order_update import OrderUpdate
 
 load_dotenv(dotenv_path=".env")
 app = FastAPI(title=os.getenv("APP_NAME"),
-              version=os.getenv("APP_VERSION"),
-              server_description=[{"url": "http://localhost:8000", "description": "dev server"}],
-              debug=True)
+              version=os.getenv("APP_VERSION"))
 faker = Faker()
 registry.register("cockroach.psycopg2", "cockroach_dialect", "CockroachDBDialect")
 log = logging.getLogger("sqlalchemy.engine")
@@ -142,7 +141,7 @@ def get_orders():
 
 @app.post("/v1/orders", response_model=None)
 def post_order(order_desc: str, order_price: float, carrier_id: str, customer_id: str) -> dict[
-	                                                                                          str, Order | str | int] | JSONResponse:
+	                                                                                          str, OrderORM | str | int] | JSONResponse:
 	try:
 		db = session()
 		random_date = faker.date_time_between(start_date=faker.past_date(), end_date=faker.date_time().now())
@@ -162,9 +161,8 @@ def post_order(order_desc: str, order_price: float, carrier_id: str, customer_id
 		                 volume=float(faker.random_number()) / 100,
 		                 order_status=random.choice(list(OrderStatus)),
 		                 package_type=random.choice(list(OrderPackage)), )
-		create_order(db, order)
-		order_return = Order.order_orm_to_order(order)
-		return {"order": order_return,
+		order_returned = create_order(db, order)
+		return {"order": order_returned,
 		        "timestamp": datetime.now().isoformat(),
 		        "trace_id": str(uuid.uuid4()),
 		        "http_response_code": 201,
@@ -179,28 +177,35 @@ def post_order(order_desc: str, order_price: float, carrier_id: str, customer_id
 
 
 @app.post("/v2/orders", response_model=None)
-def post_order_with_request_body(order: Order) -> dict[str, Order | str | int] | JSONResponse:
+def post_order_with_request_body(order_create: OrderCreate) -> dict[str, OrderORM | str | int] | JSONResponse:
 	try:
 		db = session()
 		random_date = faker.date_time_between(start_date=faker.past_date(), end_date=faker.date_time().now())
-		log.info(f"received order data: {order}")
-		order = OrderORM(order_id=str(uuid.uuid4()),
-		                 order_desc=f"{order.order_desc}{faker.company()}",
-		                 order_price=float(order.order_price + faker.random_int()),
-		                 carrier_id=f"{order.carrier_id}{faker.random_int(10000, 910000)}",
-		                 customer_id=f"{order.customer_id}{faker.random_int(10000, 90000)}",
-		                 order_barcode=uuid.uuid4(),
-		                 order_create_date=random_date + timedelta(days=-5),
-		                 order_update_date=random_date,
-		                 order_origin=faker.country(),
-		                 delivery_date=faker.date_time(),
-		                 order_discount=float(faker.random_number(4)) / 100,
-		                 order_availability=float(faker.random_number()) > 0.7,
-		                 weight=float(faker.random_number()) / 100,
-		                 volume=float(faker.random_number()) / 100,
-		                 order_status=random.choice(list(OrderStatus)),
-		                 package_type=random.choice(list(OrderPackage)), )
-		order_created = Order.order_orm_to_order(create_order(db, order))
+		log.info(f"received order data: {order_create}")
+		order_db = OrderORM(**order_create.dict())
+
+		if "test" in order_db.order_desc:
+			order_db.order_desc = faker.company() + "-" + faker.sentence()
+		if float(order_db.order_price) < 100.00:
+			order_db.order_price = faker.random_number() * 99.999
+		if "test" in order_db.customer_id:
+			order_db.customer_id = "CUSTOMER-" + str(faker.random_number())
+		if "test" in order_db.carrier_id:
+			order_db.carrier_id = "CARRIER-" + str(faker.random_number())
+		order_db.order_discount = float(faker.random_number(4)) / 100
+		order_db.order_availability = float(faker.random_number()) > 0.7
+		order_db.weight = float(faker.random_number()) / 100
+		order_db.volume = float(faker.random_number()) / 100
+		order_db.order_status = random.choice(list(OrderStatus))
+		order_db.order_package = random.choice(list(OrderPackage))
+		order_db.order_origin = faker.country()
+		order_db.delivery_date = faker.date_time()
+		order_db.order_barcode = uuid.uuid4()
+		order_db.order_create_date = random_date
+		order_db.order_update_date = random_date
+		order_db.order_id = str(uuid.uuid4())
+
+		order_created = create_order(db, order_db)
 		log.info(f"created order: {order_created}")
 		return {
 			"order": order_created,
@@ -209,7 +214,7 @@ def post_order_with_request_body(order: Order) -> dict[str, Order | str | int] |
 			"http_response_code": 201,
 		}
 	except (SQLAlchemyError, AssertionError, ResponseValidationError, OperationalError, Exception) as e:
-		log.error(f"CreateOrder:: Exception:: {e}, type: {type(e)} for order_id: {order.order_id}")
+		log.error(f"CreateOrder:: Exception:: {e}, type: {type(e)} for order_id: {order_db.order_id}")
 		return JSONResponse(status_code=500, content={"error": str(e),
 		                                              "timestamp": datetime.now().isoformat(),
 		                                              "trace_id": str(uuid.uuid4()),
@@ -218,37 +223,21 @@ def post_order_with_request_body(order: Order) -> dict[str, Order | str | int] |
 
 
 @app.put("/v1/orders", response_model=None)
-def put_order(order: Order) -> dict[str, Order | str | int] | JSONResponse:
+def put_order(order_update: OrderUpdate) -> dict[str, OrderORM | str | int] | JSONResponse:
 	try:
 		db = session()
-		log.info(f"received order data: {order}")
-		order = OrderORM(
-			order_id=order.order_id,
-			order_desc=order.order_desc,
-			order_price=order.order_price,
-			carrier_id=order.carrier_id,
-			customer_id=order.customer_id,
-			order_barcode=order.order_barcode,
-			order_create_date=order.order_update_date,
-			order_update_date=datetime.now(),
-			delivery_date=order.delivery_date,
-			order_availability=order.order_availability,
-			weight=order.weight,
-			volume=order.volume,
-			order_status=order.order_status,
-			package_type=order.package_type, )
-
-		order_updated = update_order(db, order)
-		order = Order.order_orm_to_order(order_updated)
-		log.info(f"updated order: {order}")
+		log.info(f"\n\nreceived order data: {order_update}")
+		order_update = OrderORM(**order_update.dict())
+		order_updated = update_order(db, order_update)
+		log.info(f"updated order: {order_updated}")
 		return {
-			"order": order,
+			"order": order_updated,
 			"timestamp": datetime.now().isoformat(),
 			"trace_id": str(uuid.uuid4()),
 			"http_response_code": 200,
 		}
 	except (SQLAlchemyError, AssertionError, ResponseValidationError, OperationalError, Exception) as e:
-		log.error(f"UpdateOrder:: Exception:: {e}, type: {type(e)} for order_id: {order.order_id}")
+		log.error(f"UpdateOrder:: Exception:: {e}, type: {type(e)} for order_id: {order_update.order_id}")
 		return JSONResponse(status_code=500, content={"error": str(e),
 		                                              "timestamp": datetime.now().isoformat(),
 		                                              "trace_id": str(uuid.uuid4()),
