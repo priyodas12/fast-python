@@ -11,17 +11,16 @@ from faker import Faker
 from fastapi import FastAPI, Query
 from fastapi.exceptions import ResponseValidationError
 from scalar_fastapi import get_scalar_api_reference
-from sqlalchemy import text
 from sqlalchemy.dialects import registry
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from starlette.responses import JSONResponse
 
-from app.dao.database import session
+from app.dao.database import init_db
 from app.dao.order_dao import *
 from app.model.enums.order_package import OrderPackage
 from app.model.enums.order_status import OrderStatus
 from app.model.order_create import OrderCreate
-from app.model.order_orm import OrderORM
+from app.model.order_orm import Base, OrderORM
 from app.model.order_update import OrderUpdate
 
 load_dotenv(dotenv_path=".env")
@@ -33,15 +32,9 @@ log = logging.getLogger("sqlalchemy.engine")
 coloredlogs.install(level="INFO", logger=log)
 
 
-@app.on_event("startup")
-def on_start():
-	try:
-		db = session()
-		db.execute(text("SELECT 1"))
-		log.info(f"Database connection tested at {datetime.now()}")
-		db.close()
-	except Exception as e:
-		log.error(f"Exception while connecting database:: {e}")
+def on_application_boot_up():
+	engine, session_local, log = init_db()
+	Base.metadata.create_all(engine)
 
 
 @app.get("/")
@@ -58,17 +51,16 @@ def get_app_status():
 def get_order_by_customer_id(customer_id: str | None = Query(default=None, max_length=20)) -> dict[str, Any] | dict[
 	str, str] | set[str | Any] | JSONResponse:
 	try:
-		db = session()
 		if not customer_id:
 			log.info("no customer id provided")
-			order_latest = get_order_latest(db)
+			order_latest = get_order_latest()
 			log.info(f"latest order : {order_latest} returned!")
 			return {"order": order_latest,
 			        "timestamp": datetime.now().isoformat(),
 			        "trace_id": str(uuid.uuid4()),
 			        "http_response_code": 200,
 			        }
-		order_orm = get_order_by_cust_id(db, customer_id)
+		order_orm = get_order_by_cust_id(customer_id)
 		log.info(f"order with customer_id {customer_id} from cockroachdb: {order_orm.__str__()}")
 		if not order_orm:
 			log.debug(f"error while getting order with customer_id {customer_id} from db")
@@ -94,8 +86,7 @@ def get_order_by_customer_id(customer_id: str | None = Query(default=None, max_l
 @app.get("/orders/{order_id}", response_model=None)
 def get_order_by_order_id(order_id: str) -> dict[str, str] | JSONResponse:
 	try:
-		db = session()
-		order_orm = get_order_by_id(db, order_id)
+		order_orm = get_order_by_id(order_id)
 		log.info(f"order {order_id} from cockroachdb: {order_orm.__str__()}")
 		if not order_orm:
 			log.debug(f"error while getting order {order_id} from db")
@@ -121,8 +112,7 @@ def get_order_by_order_id(order_id: str) -> dict[str, str] | JSONResponse:
 @app.get("/orders")
 def get_orders():
 	try:
-		db = session()
-		orders = get_all_orders(db)
+		orders = get_all_orders()
 		for order in orders:
 			log.info(f"fetched orders: {order.__str__()}")
 		return {"orders": orders,
@@ -143,7 +133,6 @@ def get_orders():
 def post_order(order_desc: str, order_price: float, carrier_id: str, customer_id: str) -> dict[
 	                                                                                          str, OrderORM | str | int] | JSONResponse:
 	try:
-		db = session()
 		random_date = faker.date_time_between(start_date=faker.past_date(), end_date=faker.date_time().now())
 		order = OrderORM(order_id=str(uuid.uuid4()),
 		                 order_desc=f"{order_desc}{faker.company()}",
@@ -161,7 +150,7 @@ def post_order(order_desc: str, order_price: float, carrier_id: str, customer_id
 		                 volume=float(faker.random_number()) / 100,
 		                 order_status=random.choice(list(OrderStatus)),
 		                 package_type=random.choice(list(OrderPackage)), )
-		order_returned = create_order(db, order)
+		order_returned = create_order(order)
 		return {"order": order_returned,
 		        "timestamp": datetime.now().isoformat(),
 		        "trace_id": str(uuid.uuid4()),
@@ -179,7 +168,6 @@ def post_order(order_desc: str, order_price: float, carrier_id: str, customer_id
 @app.post("/v2/orders", response_model=None)
 def post_order_with_request_body(order_create: OrderCreate) -> dict[str, OrderORM | str | int] | JSONResponse:
 	try:
-		db = session()
 		random_date = faker.date_time_between(start_date=faker.past_date(), end_date=faker.date_time().now())
 		log.info(f"received order data: {order_create}")
 		order_db = OrderORM(**order_create.dict())
@@ -205,7 +193,7 @@ def post_order_with_request_body(order_create: OrderCreate) -> dict[str, OrderOR
 		order_db.order_update_date = random_date
 		order_db.order_id = str(uuid.uuid4())
 
-		order_created = create_order(db, order_db)
+		order_created = create_order(order_db)
 		log.info(f"created order: {order_created}")
 		return {
 			"order": order_created,
@@ -225,10 +213,9 @@ def post_order_with_request_body(order_create: OrderCreate) -> dict[str, OrderOR
 @app.put("/v1/orders", response_model=None)
 def put_order(order_update: OrderUpdate) -> dict[str, OrderORM | str | int] | JSONResponse:
 	try:
-		db = session()
 		log.info(f"\n\nreceived order data: {order_update}")
 		order_update = OrderORM(**order_update.dict())
-		order_updated = update_order(db, order_update)
+		order_updated = update_order(order_update)
 		log.info(f"updated order: {order_updated}")
 		return {
 			"order": order_updated,
@@ -248,9 +235,9 @@ def put_order(order_update: OrderUpdate) -> dict[str, OrderORM | str | int] | JS
 @app.delete("/v1/orders/{order_id}", response_model=None)
 def delete_order(order_id: str) -> dict[str, any] | dict[str, str]:
 	try:
-		db = session()
+
 		log.info(f"deleting order data: {order_id}")
-		deleted_order = delete_order_by_order_id(db, order_id)
+		deleted_order = delete_order_by_order_id(order_id)
 		log.info(f"updated order: {deleted_order}")
 		return {f"{order_id}": "deleted"}
 	except (SQLAlchemyError, AssertionError, ResponseValidationError, OperationalError, Exception) as e:

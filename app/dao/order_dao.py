@@ -1,31 +1,35 @@
 import logging as log
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
 
+from app.dao.database import get_db
 from app.model.order_orm import OrderORM
 
 
-def get_order_by_id(db: Session, order_id: str):
-	return db.query(OrderORM).filter(OrderORM.order_id == order_id).one()
+def get_order_by_id(order_id: str):
+	with get_db() as db:
+		return db.query(OrderORM).filter(OrderORM.order_id == order_id).first()
 
 
-def get_order_by_cust_id(db: Session, customer_id: str):
-	return db.query(OrderORM).filter(OrderORM.customer_id == customer_id).first()
+def get_order_by_cust_id(customer_id: str):
+	with get_db() as db:
+		return db.query(OrderORM).filter(OrderORM.customer_id == customer_id).one()
 
 
-def get_order_latest(db: Session):
-	return db.query(OrderORM).order_by(OrderORM.order_create_date.desc()).first()
+def get_order_latest():
+	with get_db() as db:
+		return db.query(OrderORM).order_by(OrderORM.order_id.desc()).first()
 
 
-def get_all_orders(db: Session):
-	return db.query(OrderORM).all()
+def get_all_orders():
+	with get_db() as db:
+		return db.query(OrderORM).all()
 
 
-def create_order(db: Session, order: OrderORM) -> OrderORM:
-	db.add(order)
-	db.commit()
-	return order
+def create_order(order: OrderORM) -> OrderORM:
+	with get_db() as db:
+		db.add(order)
+		return order
 
 
 def update_order_field(order_exists, order):
@@ -45,22 +49,22 @@ def update_order_field(order_exists, order):
 	return order_exists
 
 
-def update_order(db: Session, order_orm: OrderORM):
-	order_exists = get_order_by_id(db, order_orm.order_id)
+def update_order(order_orm: OrderORM):
+	order_exists = get_order_by_id(order_orm.order_id)
 	if not order_exists:
 		log.info(f"Exception while fetching new order: {order_exists}")
 		raise HTTPException(status_code=404, detail=f"Order: {order_exists.order_id} not found")
 	update_order_field(order_exists, order_orm)
-	db.commit()
-	db.refresh(order_exists)
-	return order_exists
+	with get_db() as db:
+		db.add(order_orm)
+		return order_orm
 
 
-def delete_order_by_order_id(db: Session, order_id: str):
-	db_order = get_order_by_id(db, order_id)
+def delete_order_by_order_id(order_id: str):
+	db_order = get_order_by_id(order_id)
 	if not db_order:
 		log.info(f"Exception while fetching new order: {db_order}")
 		raise HTTPException(status_code=404, detail=f"Order: {order_id} not found")
-	db.delete(db_order)
-	db.commit()
-	return db_order
+	with get_db() as db:
+		db.delete(db_order)
+		return db_order
